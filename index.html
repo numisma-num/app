@@ -1,8 +1,4 @@
 <!DOCTYPE html>
-
-
-
-
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -64,6 +60,7 @@
             padding: 20px;
             text-align: center;
             margin-top: 30px;
+            box-sizing: border-box;
         }
         h1 { font-size: 42px; font-weight: 900; margin-bottom: 5px; letter-spacing: -1px; }
         .subtitle { color: var(--text-muted); font-size: 16px; margin-bottom: 35px; }
@@ -80,7 +77,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
         }
         .btn-buy {
             background-color: transparent;
@@ -192,15 +188,15 @@
                 <button class="btn-buy" onclick="window.open('https://pancakeswap.finance', '_blank')">[ Купить токен NUM ]</button>
             </div>
         </div>
+
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-label">Осталось наград в фонде</div>
                 <div class="stat-value highlight" id="rewardsPoolValue">500 000.0000 NUM</div>
-
             </div>
             <div class="stat-card">
                 <div class="stat-label">Всего заблокировано (TVL)</div>
-                <div class="stat-value">400 000 NUM</div>
+                <div class="stat-value" id="tvlValue">400 000 NUM</div>
             </div>
             <div class="stat-card full-width">
                 <div class="stat-label">Автономный таймер пула экосистемы</div>
@@ -224,96 +220,47 @@
         </div>
     </main>
 
+    <!-- Официальное подключение библиотеки Web3.js -->
     <script src="https://cloudflare.com"></script>
     <script>
-        // ТУТ ВАШ РЕАЛЬНЫЙ АДРЕС СМАРТ-КОНТРАКТА СТЕЙКИНГА (В КАВЫЧКАХ)
         const stakingContractAddress = "0x55598d16b20B34Dd6Ba562aD060830e2DD8E2b54";
-
         const stakingAbi = [
             "function stake(uint256 amount) public",
             "function withdraw(uint256 amount) public",
             "function getReward() public",
-            "function earned(address account) public view returns (uint256)"
+            "function earned(address account) public view returns (uint256)",
+            "function totalSupply() public view returns (uint256)"
         ];
         let provider, signer, stakingContract, userAddress;
         
-        let initialRewards = 500000.000000;
+        const totalRewardsPool = 500000.0000;
+        const rewardRatePerSecond = 0.003169;
+        const startTime = 1759080000; // Юникод-время старта проекта
 
-        
+        // Математический счетчик таяния фонда в реальном времени
+        setInterval(() => {
+            const currentTimestamp = Math.floor(Date.now() / 1000);
+            const secondsPassed = currentTimestamp - startTime;
+            let currentRewards = totalRewardsPool;
+            if (secondsPassed > 0) { currentRewards = totalRewardsPool - (secondsPassed * rewardRatePerSecond); }
+            if (currentRewards < 0) currentRewards = 0;
+            document.getElementById('rewardsPoolValue').innerText = currentRewards.toFixed(4) + ' NUM';
+        }, 1000);
+
         async function connectWallet() {
             if (typeof window.ethereum !== 'undefined') {
-                provider = new ethers.providers.Web3Provider(window.ethereum);
-                await provider.send("eth_requestAccounts", []);
-                signer = provider.getSigner();
-                userAddress = await signer.getAddress();
-                stakingContract = new ethers.Contract(stakingContractAddress, stakingAbi, signer);
-                document.getElementById('connectBtn').innerText = userAddress.substring(0,6) + '...' + userAddress.substring(38);
-                startUpdateLoop();
-            } else {
-                alert("Пожалуйста, откройте этот сайт через встроенный Web3-браузер MetaMask!");
-            }
-        }
-
-                function startUpdateLoop() {
-            // Запускаем постоянный опрос блокчейна BNB Chain
-            setInterval(async () => {
                 try {
-                    // 1. Запрос реального баланса наградного фонда контракта
-                    const rawBalance = await provider.getBalance(stakingContractAddress);
-                    // Если контракт хранит токены NUM на своем балансе, ethers вычитает их:
-                    const contractBnbBalance = ethers.utils.formatEther(rawBalance);
-                    
-                    // Альтернативный точный метод через чтение totalSupply пула:
-                    // Если в контракте прописан метод balanceOf для самого себя, используем его.
-                    // Для вывода достоверного баланса наград подтягиваем данные:
-                    
-                    if (stakingContract) {
-                        // Узнаем, сколько ВСЕГО монет залочили люди в пул (TVL) прямо сейчас в блокчейне
-                        // Контракт вернет точное число с учетом ваших 400 000 NUM и новых инвесторов
-                        const txTotalSupply = await provider.call({
-                            to: stakingContractAddress,
-                            data: "0x18160ddd" // Hex-код функции totalSupply()
-                        });
-                        if(txTotalSupply !== "0x") {
-                            const tvlWei = ethers.BigNumber.from(txTotalSupply);
-                            document.getElementById('tvlValue').innerText = parseFloat(ethers.utils.formatEther(tvlWei)).toLocaleString('ru-RU') + ' NUM';
-                        }
-                    }
-
-                    // 2. Показываем личные капающие награды авторизованного пользователя
-                    if (stakingContract && userAddress) {
-                        const earned = await stakingContract.earned(userAddress);
-                        document.getElementById('earnedAmount').innerText = parseFloat(ethers.utils.formatEther(earned)).toFixed(6) + ' NUM';
-                    }
-                } catch (e) {
-                    console.error("Ошибка обновления данных из блокчейна:", e);
-                }
-            }, 2000);
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    await provider.send("eth_requestAccounts", []);
+                    signer = provider.getSigner();
+                    userAddress = await signer.getAddress();
+                    stakingContract = new ethers.Contract(stakingContractAddress, stakingAbi, signer);
+                    document.getElementById('connectBtn').innerText = userAddress.substring(0,6) + '...' + userAddress.substring(38);
+                    startUpdateLoop();
+                } catch (error) { console.error("Ошибка подключения:", error); }
+            } else { alert("Пожалуйста, откройте этот сайт через встроенный Web3-браузер MetaMask!"); }
         }
 
-
-        async function stakeTokens() {
-            const amount = document.getElementById('stakeAmount').value;
-            if (!amount || amount <= 0) return alert("Введите корректное число монет NUM!");
-            try {
-                const tx = await stakingContract.stake(ethers.utils.parseEther(amount));
-                alert("Транзакция отправлена в BNB Chain. Ожидайте...");
-                await tx.wait();
-                alert("Монеты успешно запущены в пул стейкинга!");
-            } catch (error) {
-                console.error("Ошибка стейкинга:", error);
-            }
-        }
-
-        async function claimRewards() {
-            try {
-                const tx = await stakingContract.getReward();
-                await tx.wait();
-                alert("Награды успешно зачислены на ваш кошелёк!");
-            } catch (error) {
-                console.error("Ошибка вывода наград:", error);
-            }
-        }
-    </script>
-</body>
-</html>
+        function startUpdateLoop() {
+            setInterval(async () => {
+try {if (stakingContract) {const rawTotalSupply = await stakingContract.totalSupply();document.getElementById('tvlValue').innerText = parseFloat(ethers.utils.formatEther(rawTotalSupply)).toLocaleString('ru-RU') + ' NUM';}if (stakingContract && userAddress) {const earned = await stakingContract.earned(userAddress);document.getElementById('earnedAmount').innerText = parseFloat(ethers.utils.formatEther(earned)).toFixed(6) + ' NUM';}} catch (e) { console.error("Ошибка опроса сети:", e); }}, 2000);}async function stakeTokens() {const amount = document.getElementById('stakeAmount').value;if (!amount || amount <= 0) return alert("Введите корректное число монет NUM!");try {const tx = await stakingContract.stake(ethers.utils.parseEther(amount));alert("Транзакция отправлена в BNB Chain. Ожидайте...");await tx.wait();alert("Монеты успешно запущены в пул стейкинга!");} catch (error) { console.error("Ошибка стейкинга:", error); }}async function claimRewards() {try {const tx = await stakingContract.getReward();await tx.wait();alert("Награды успешно зачислены на ваш кошелёк!");} catch (error) { console.error("Ошибка вывода наград:", error); }}
