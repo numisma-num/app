@@ -151,3 +151,5 @@
                         } catch (e) { console.error(e); }
                     }, 2000);
 } catch (error) { console.error(error); }} else { alert("Пожалуйста, откройте этот сайт через встроенный Web3-браузер MetaMask!"); }}async function stakeTokens() {const amount = document.getElementById('stakeAmount').value;if (!amount || amount <= 0) return alert("Введите число!");try {const tx = await stakingContract.stake(ethers.utils.parseEther(amount));alert("Транзакция отправлена...");await tx.wait();alert("Успешно заблокировано в пуле!");} catch (error) { console.error(error); }}async function claimRewards() {try {const tx = await stakingContract.getReward();await tx.wait();alert("Награды зачислены на ваш кошелёк!");} catch (error) { console.error(error); }}// Запуск парсинга сети при открытии страницыwindow.onload = fetchBlockchainData;
+
+        
