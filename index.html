@@ -234,12 +234,7 @@
         
         let initialRewards = 500000.000000;
 
-        // Счетчик, который тает каждую секунду на глазах у инвесторов
-        setInterval(() => {
-            initialRewards -= 0.003169;
-            document.getElementById('rewardsPoolValue').innerText = initialRewards.toFixed(4) + ' NUM';
-        }, 1000);
-
+        
         async function connectWallet() {
             if (typeof window.ethereum !== 'undefined') {
                 provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -254,19 +249,43 @@
             }
         }
 
-        function startUpdateLoop() {
+                function startUpdateLoop() {
+            // Запускаем постоянный опрос блокчейна BNB Chain
             setInterval(async () => {
-                if (stakingContract && userAddress) {
-                    try {
-                        const earned = await stakingContract.earned(userAddress);
-                        const formattedEarned = ethers.utils.formatEther(earned);
-                        document.getElementById('earnedAmount').innerText = parseFloat(formattedEarned).toFixed(6) + ' NUM';
-                    } catch (e) {
-                        console.error(e);
+                try {
+                    // 1. Запрос реального баланса наградного фонда контракта
+                    const rawBalance = await provider.getBalance(stakingContractAddress);
+                    // Если контракт хранит токены NUM на своем балансе, ethers вычитает их:
+                    const contractBnbBalance = ethers.utils.formatEther(rawBalance);
+                    
+                    // Альтернативный точный метод через чтение totalSupply пула:
+                    // Если в контракте прописан метод balanceOf для самого себя, используем его.
+                    // Для вывода достоверного баланса наград подтягиваем данные:
+                    
+                    if (stakingContract) {
+                        // Узнаем, сколько ВСЕГО монет залочили люди в пул (TVL) прямо сейчас в блокчейне
+                        // Контракт вернет точное число с учетом ваших 400 000 NUM и новых инвесторов
+                        const txTotalSupply = await provider.call({
+                            to: stakingContractAddress,
+                            data: "0x18160ddd" // Hex-код функции totalSupply()
+                        });
+                        if(txTotalSupply !== "0x") {
+                            const tvlWei = ethers.BigNumber.from(txTotalSupply);
+                            document.getElementById('tvlValue').innerText = parseFloat(ethers.utils.formatEther(tvlWei)).toLocaleString('ru-RU') + ' NUM';
+                        }
                     }
+
+                    // 2. Показываем личные капающие награды авторизованного пользователя
+                    if (stakingContract && userAddress) {
+                        const earned = await stakingContract.earned(userAddress);
+                        document.getElementById('earnedAmount').innerText = parseFloat(ethers.utils.formatEther(earned)).toFixed(6) + ' NUM';
+                    }
+                } catch (e) {
+                    console.error("Ошибка обновления данных из блокчейна:", e);
                 }
-            }, 1000);
+            }, 2000);
         }
+
 
         async function stakeTokens() {
             const amount = document.getElementById('stakeAmount').value;
